@@ -13,18 +13,19 @@
 
 각 단계가 그 자체로 완결된 '살아있는 전체'이며, 다음 단계가 이전을 보존하며 펼쳐진다.
 
-- **Step 0–2 (현재):** 다구 선택 + 색·맛·기분·사람 기록 → localStorage 저장 → 타임라인으로 돌아보기. (기본 삭제 포함)
+- **Step 0–2:** 기록 → localStorage 저장 → 타임라인으로 돌아보기. (기본 삭제 포함)
+- **Step 4 (현재):** 백지 그림판에 손그림풍 다구(차판·다호·잔·주전자·숙우·차우)를 눌러 올리고 끌어서 자유 배치. 위치는 그림판 대비 비율로 저장.
 - Step 3: 카드 편집.
-- Step 4: 이모지 → 손그림풍 SVG 다구 세트, 배치.
 - Step 5: JSON 내보내기 (데이터 유실 방어).
 
 ## 데이터 모델
 
 ```js
 TeaCard = {
-  id, teaware: string[],
-  color, taste, mood, withWhom,   // 빈 값 허용
-  createdAt, updatedAt            // 연속성·재방문 관찰용 흔적
+  id,
+  teaware: [{ ware, x, y }],       // x,y = 그림판 대비 비율(0..1). (구형: string[] 이모지 — 호환 렌더)
+  color, taste, mood, withWhom,    // 빈 값 허용
+  createdAt, updatedAt             // 연속성·재방문 관찰용 흔적
 }
 ```
 

@@ -13,6 +13,7 @@
       --muted: #9a9384;
       --accent: #6b8f71;
       --line: #e7e1d3;
+      --stroke: #5b5446;
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body {
@@ -22,10 +23,7 @@
       color: var(--ink);
       padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
     }
-    header {
-      text-align: center;
-      padding: 22px 16px 6px;
-    }
+    header { text-align: center; padding: 22px 16px 6px; }
     header h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: .02em; }
     header p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
     main { max-width: 560px; margin: 0 auto; padding: 12px 16px 96px; }
@@ -39,21 +37,61 @@
     }
     .label { font-size: 12px; color: var(--muted); margin: 14px 2px 6px; }
     .label:first-child { margin-top: 0; }
+    .hint { font-size: 11px; color: #c2bbab; font-weight: 400; }
 
-    .teaware {
-      display: flex; flex-wrap: wrap; gap: 8px;
+    /* 백지 그림판 */
+    .board {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      background:
+        repeating-linear-gradient(0deg, transparent 0 23px, #f4efe3 23px 24px),
+        #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      touch-action: none;
     }
-    .teaware button {
-      font-size: 26px; line-height: 1;
-      width: 46px; height: 46px;
+    .board.empty::after {
+      content: "다구를 눌러 올린 뒤, 끌어서 차림을 놓아보세요";
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      color: #cfc7b6; font-size: 13px; text-align: center; padding: 0 24px;
+      pointer-events: none;
+    }
+    .placed {
+      position: absolute; width: 64px;
+      transform: translate(-50%, -50%);
+      touch-action: none; cursor: grab; user-select: none;
+    }
+    .placed.grab { cursor: grabbing; filter: drop-shadow(0 3px 4px rgba(0,0,0,.18)); z-index: 5; }
+    .placed .rm {
+      position: absolute; top: -9px; right: -9px;
+      width: 20px; height: 20px; border-radius: 50%;
+      background: #fff; border: 1px solid var(--line);
+      color: #b6ad9b; font-size: 13px; line-height: 18px; text-align: center;
+      cursor: pointer; opacity: 0; transition: opacity .12s;
+    }
+    .placed:hover .rm, .placed.grab .rm { opacity: 1; }
+
+    .ware-svg { width: 100%; height: auto; display: block; pointer-events: none; }
+    .ware-svg * {
+      fill: var(--card); stroke: var(--stroke);
+      stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round;
+      vector-effect: non-scaling-stroke;
+    }
+
+    /* 다구 팔레트 */
+    .palette { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .palette button {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      width: 60px; padding: 6px 2px 4px;
       border: 1px solid var(--line); background: #fff;
       border-radius: 12px; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      transition: transform .08s ease, border-color .12s ease, background .12s ease;
     }
-    .teaware button[aria-pressed="true"] {
-      border-color: var(--accent); background: #eef3ec; transform: translateY(-1px);
-    }
+    .palette button:active { background: #eef3ec; }
+    .palette .pic { width: 34px; height: 34px; }
+    .palette .nm { font-size: 11px; color: var(--muted); }
 
     input[type="text"] {
       width: 100%; font-size: 16px; color: var(--ink);
@@ -76,10 +114,16 @@
 
     .entry {
       background: var(--card); border: 1px solid var(--line);
-      border-radius: 16px; padding: 14px 16px; margin-bottom: 12px;
+      border-radius: 16px; padding: 14px; margin-bottom: 12px;
       display: flex; gap: 14px;
     }
-    .entry .ware { font-size: 30px; line-height: 1.1; flex-shrink: 0; }
+    .mini {
+      position: relative; width: 104px; flex-shrink: 0;
+      aspect-ratio: 4 / 3; background: #fff;
+      border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+    }
+    .mini .placed { width: 26px; cursor: default; }
+    .mini .placed .rm { display: none; }
     .entry .body { flex: 1; min-width: 0; }
     .entry .date { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
     .entry .fields { font-size: 14px; line-height: 1.55; }
@@ -88,18 +132,21 @@
       background: none; border: none; color: #cfc7b6; font-size: 18px;
       cursor: pointer; padding: 0 2px; align-self: flex-start;
     }
+    .legacy-ware { font-size: 26px; }
   </style>
 </head>
 <body>
   <header>
     <h1>차 그림일기</h1>
-    <p>오늘 마신 차 한 잔을 간직하세요</p>
+    <p>오늘의 차림을 그림판에 놓아 간직하세요</p>
   </header>
 
   <main>
     <section class="compose">
-      <div class="label">다구</div>
-      <div class="teaware" id="teaware"></div>
+      <div class="label">차림 <span class="hint">— 다구를 눌러 올리고 끌어서 배치</span></div>
+      <div class="board empty" id="board"></div>
+
+      <div class="palette" id="palette"></div>
 
       <div class="label">색</div>
       <input type="text" id="color" placeholder="맑은 호박빛…" />
@@ -122,17 +169,26 @@
   <script>
     "use strict";
     var STORE_KEY = "tea-cards";
-    var WARE = ["🍵", "🫖", "🍶", "☕", "🏺", "🥃", "🫗", "🍃"];
 
-    var selectedWare = [];
+    // 손그림풍 다구 (viewBox 0 0 64 64, 닫힌 실루엣 + 잉크 스트로크)
+    var WARE = {
+      teaboard: { name: "차판", svg: '<path d="M8 38 q24 -9 48 0 q0 7 0 7 q-24 8 -48 0 q0 -7 0 -7 z"/>' },
+      teapot:   { name: "다호", svg: '<path d="M19 33 q-8 0 -8 8 q0 4 3 6 q-1 -5 1 -8 q2 -4 6 -3 z"/><ellipse cx="31" cy="40" rx="13" ry="11"/><path d="M43 35 q9 -2 11 4 q-4 -1 -7 1 z"/><path d="M23 29 q8 -6 16 0 q-8 3 -16 0 z"/><circle cx="31" cy="26" r="2.4"/>' },
+      cup:      { name: "잔",   svg: '<path d="M22 32 q9 1 20 0 q-1 11 -10 13 q-9 -2 -10 -13 z"/><path d="M27 46 q5 2 10 0 q-1 3 -10 0 z"/>' },
+      kettle:   { name: "주전자", svg: '<path d="M22 33 q10 -13 21 -1 q-2 1 -3 2 q-8 -8 -15 0 q-1 -1 -3 -1 z"/><ellipse cx="32" cy="41" rx="12" ry="11"/><path d="M44 37 q8 -1 10 5 q-4 -2 -8 -1 z"/><path d="M25 30 q7 -4 14 0 q-7 3 -14 0 z"/>' },
+      pitcher:  { name: "숙우", svg: '<path d="M22 30 q10 1 20 0 l-2 15 q-8 4 -16 0 z"/><path d="M42 30 l5 -3 l-2 5 z"/>' },
+      bowl:     { name: "차우", svg: '<path d="M16 34 q16 2 32 0 q-3 12 -16 13 q-13 -1 -16 -13 z"/>' }
+    };
+    var WARE_ORDER = ["teaboard", "teapot", "cup", "kettle", "pitcher", "bowl"];
+
+    var placed = []; // [{ware, x, y}] — x,y 는 그림판 대비 비율(0..1)
 
     function load() {
       try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; }
       catch (e) { return []; }
     }
-    function save(cards) {
-      localStorage.setItem(STORE_KEY, JSON.stringify(cards));
-    }
+    function save(cards) { localStorage.setItem(STORE_KEY, JSON.stringify(cards)); }
+    function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
 
     function fmtDate(iso) {
       var d = new Date(iso);
@@ -141,33 +197,109 @@
              " (" + days[d.getDay()] + ") " +
              String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
     }
+    function svgWrap(key) {
+      var w = WARE[key]; if (!w) return "";
+      return '<svg class="ware-svg" viewBox="0 0 64 64">' + w.svg + "</svg>";
+    }
 
-    function renderTeaware() {
-      var box = document.getElementById("teaware");
-      box.innerHTML = "";
-      WARE.forEach(function (emoji) {
+    // ---- 작성 그림판 ----
+    var board = document.getElementById("board");
+
+    function syncBoardEmpty() {
+      board.classList.toggle("empty", placed.length === 0);
+    }
+
+    function makePlaced(item) {
+      var el = document.createElement("div");
+      el.className = "placed";
+      el.style.left = (item.x * 100) + "%";
+      el.style.top = (item.y * 100) + "%";
+      el.innerHTML = svgWrap(item.ware) + '<span class="rm" title="치우기">×</span>';
+
+      el.querySelector(".rm").addEventListener("click", function (e) {
+        e.stopPropagation();
+        placed.splice(placed.indexOf(item), 1);
+        el.remove();
+        syncBoardEmpty();
+      });
+
+      el.addEventListener("pointerdown", function (e) {
+        if (e.target.classList.contains("rm")) return;
+        el.setPointerCapture(e.pointerId);
+        el.classList.add("grab");
+        var b = board.getBoundingClientRect();
+        var px = (e.clientX - b.left) / b.width, py = (e.clientY - b.top) / b.height;
+        var offx = item.x - px, offy = item.y - py;
+        function move(ev) {
+          item.x = clamp((ev.clientX - b.left) / b.width + offx, 0.08, 0.92);
+          item.y = clamp((ev.clientY - b.top) / b.height + offy, 0.1, 0.9);
+          el.style.left = (item.x * 100) + "%";
+          el.style.top = (item.y * 100) + "%";
+        }
+        function up() {
+          el.classList.remove("grab");
+          el.removeEventListener("pointermove", move);
+          el.removeEventListener("pointerup", up);
+        }
+        el.addEventListener("pointermove", move);
+        el.addEventListener("pointerup", up);
+      });
+
+      return el;
+    }
+
+    function addWare(key) {
+      var n = placed.length;
+      var item = {
+        ware: key,
+        x: clamp(0.5 + ((n % 3) - 1) * 0.14, 0.08, 0.92),
+        y: clamp(0.4 + Math.floor(n / 3) * 0.16, 0.1, 0.9)
+      };
+      placed.push(item);
+      board.appendChild(makePlaced(item));
+      syncBoardEmpty();
+    }
+
+    function renderPalette() {
+      var pal = document.getElementById("palette");
+      pal.innerHTML = "";
+      WARE_ORDER.forEach(function (key) {
         var b = document.createElement("button");
         b.type = "button";
-        b.textContent = emoji;
-        b.setAttribute("aria-pressed", selectedWare.indexOf(emoji) > -1 ? "true" : "false");
-        b.addEventListener("click", function () {
-          var i = selectedWare.indexOf(emoji);
-          if (i > -1) selectedWare.splice(i, 1); else selectedWare.push(emoji);
-          b.setAttribute("aria-pressed", i > -1 ? "false" : "true");
-        });
-        box.appendChild(b);
+        b.innerHTML = '<span class="pic">' + svgWrap(key) + "</span><span class=\"nm\">" + WARE[key].name + "</span>";
+        b.addEventListener("click", function () { addWare(key); });
+        pal.appendChild(b);
       });
     }
 
+    function clearBoard() {
+      placed = [];
+      board.querySelectorAll(".placed").forEach(function (n) { n.remove(); });
+      syncBoardEmpty();
+    }
+
+    // ---- 타임라인 ----
     function escapeHtml(s) {
       return s.replace(/[&<>"']/g, function (c) {
         return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
       });
     }
-
     function fieldLine(key, val) {
       if (!val) return "";
       return '<div><span class="k">' + key + '</span>' + escapeHtml(val) + "</div>";
+    }
+
+    function renderMini(teaware) {
+      // 신형: [{ware,x,y}] → 미니 그림판. 구형: ["🍵",...] → 이모지 줄.
+      if (Array.isArray(teaware) && teaware.length && typeof teaware[0] === "object") {
+        var inner = teaware.map(function (it) {
+          if (!WARE[it.ware]) return "";
+          return '<div class="placed" style="left:' + (it.x * 100) + "%;top:" + (it.y * 100) + '%">' + svgWrap(it.ware) + "</div>";
+        }).join("");
+        return '<div class="mini">' + inner + "</div>";
+      }
+      var emojis = (Array.isArray(teaware) && teaware.length) ? teaware.join(" ") : "🍵";
+      return '<div class="mini"><div class="legacy-ware" style="position:absolute;left:8px;top:8px">' + escapeHtml(emojis) + "</div></div>";
     }
 
     function renderList() {
@@ -181,9 +313,8 @@
       cards.slice().reverse().forEach(function (card) {
         var el = document.createElement("div");
         el.className = "entry";
-        var ware = card.teaware && card.teaware.length ? card.teaware.join(" ") : "🍵";
         el.innerHTML =
-          '<div class="ware">' + ware + "</div>" +
+          renderMini(card.teaware) +
           '<div class="body">' +
             '<div class="date">' + fmtDate(card.createdAt) + "</div>" +
             '<div class="fields">' +
@@ -211,7 +342,7 @@
       var now = new Date().toISOString();
       var card = {
         id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()),
-        teaware: selectedWare.slice(),
+        teaware: placed.map(function (p) { return { ware: p.ware, x: p.x, y: p.y }; }),
         color: get("color"),
         taste: get("taste"),
         mood: get("mood"),
@@ -223,14 +354,14 @@
       cards.push(card);
       save(cards);
 
-      selectedWare = [];
+      clearBoard();
       ["color", "taste", "mood", "withWhom"].forEach(function (id) { document.getElementById(id).value = ""; });
-      renderTeaware();
       renderList();
       window.scrollTo({ top: document.querySelector(".timeline").offsetTop - 12, behavior: "smooth" });
     }
 
-    renderTeaware();
+    renderPalette();
+    syncBoardEmpty();
     renderList();
     document.getElementById("save").addEventListener("click", handleSave);
   </script>
