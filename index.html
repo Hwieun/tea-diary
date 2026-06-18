@@ -144,6 +144,12 @@
       cursor: pointer; padding: 0 2px; align-self: flex-start;
     }
     .legacy-ware { font-size: 26px; }
+    .entry .fields .none { color: #c2bbab; font-style: italic; }
+    @keyframes justSaved {
+      0% { background: #eaf1e9; box-shadow: 0 0 0 2px var(--accent); }
+      100% { background: var(--card); box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+    }
+    .entry.just-saved { animation: justSaved 1.6s ease-out; }
   </style>
 </head>
 <body>
@@ -367,7 +373,7 @@
       return '<div class="mini"><div class="legacy-ware" style="position:absolute;left:8px;top:8px">' + escapeHtml(emojis) + "</div></div>";
     }
 
-    function renderList() {
+    function renderList(newId) {
       var list = document.getElementById("list");
       var cards = load();
       if (!cards.length) {
@@ -377,21 +383,26 @@
       list.innerHTML = "";
       cards.slice().reverse().forEach(function (card) {
         var el = document.createElement("div");
-        el.className = "entry";
+        el.className = "entry" + (card.id === newId ? " just-saved" : "");
+        var fields =
+          fieldLine("색", card.color) +
+          fieldLine("맛", card.taste) +
+          fieldLine("기분", card.mood) +
+          fieldLine("함께", card.withWhom);
+        if (!fields) fields = '<div class="none">차림만 간직한 날</div>';
         el.innerHTML =
           renderMini(card.teaware) +
           '<div class="body">' +
             '<div class="date">' + fmtDate(card.createdAt) + "</div>" +
-            '<div class="fields">' +
-              fieldLine("색", card.color) +
-              fieldLine("맛", card.taste) +
-              fieldLine("기분", card.mood) +
-              fieldLine("함께", card.withWhom) +
-            "</div>" +
+            '<div class="fields">' + fields + "</div>" +
           "</div>" +
           '<button class="del" title="삭제" data-id="' + card.id + '">×</button>';
         list.appendChild(el);
       });
+      if (newId) {
+        var fresh = list.querySelector(".just-saved");
+        if (fresh) fresh.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
       list.querySelectorAll(".del").forEach(function (btn) {
         btn.addEventListener("click", function () {
           if (!confirm("이 기록을 지울까요?")) return;
@@ -421,8 +432,7 @@
 
       clearBoard();
       ["color", "taste", "mood", "withWhom"].forEach(function (id) { document.getElementById(id).value = ""; });
-      renderList();
-      window.scrollTo({ top: document.querySelector(".timeline").offsetTop - 12, behavior: "smooth" });
+      renderList(card.id);
     }
 
     board.addEventListener("pointerdown", function (e) { if (e.target === board) selectPlaced(null); });
