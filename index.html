@@ -72,7 +72,16 @@
       color: #b6ad9b; font-size: 13px; line-height: 18px; text-align: center;
       cursor: pointer; opacity: 0; transition: opacity .12s;
     }
-    .placed:hover .rm, .placed.grab .rm { opacity: 1; }
+    .placed .rs {
+      position: absolute; right: -9px; bottom: -9px;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: #fff; border: 1px solid var(--line);
+      cursor: nwse-resize; opacity: 0; transition: opacity .12s; touch-action: none;
+    }
+    .placed .rs::before { content: "⤡"; display: block; font-size: 11px; color: #b6ad9b; line-height: 16px; text-align: center; }
+    .placed.sel { z-index: 6; }
+    .placed:hover .rm, .placed.grab .rm, .placed.sel .rm,
+    .placed:hover .rs, .placed.grab .rs, .placed.sel .rs { opacity: 1; }
 
     .defs { position: absolute; }
     .ware-svg { width: 100%; height: auto; display: block; pointer-events: none; overflow: visible; }
@@ -125,7 +134,7 @@
       border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
     }
     .mini .placed { width: 26px; cursor: default; }
-    .mini .placed .rm { display: none; }
+    .mini .placed .rm, .mini .placed .rs { display: none; }
     .entry .body { flex: 1; min-width: 0; }
     .entry .date { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
     .entry .fields { font-size: 14px; line-height: 1.55; }
@@ -227,14 +236,20 @@
       board.classList.toggle("empty", placed.length === 0);
     }
 
+    function selectPlaced(el) {
+      board.querySelectorAll(".placed.sel").forEach(function (n) { n.classList.remove("sel"); });
+      if (el) el.classList.add("sel");
+    }
+
     function makePlaced(item) {
+      if (item.s == null) item.s = 1;
       var el = document.createElement("div");
       el.className = "placed";
       el.style.left = (item.x * 100) + "%";
       el.style.top = (item.y * 100) + "%";
-      el.style.width = (BOARD_BASE * wareScale(item.ware)) + "px";
+      el.style.width = (BOARD_BASE * wareScale(item.ware) * item.s) + "px";
       if (item.ware === "teaboard") el.style.zIndex = "0"; // 바탕은 뒤에 깔림
-      el.innerHTML = svgWrap(item.ware) + '<span class="rm" title="치우기">×</span>';
+      el.innerHTML = svgWrap(item.ware) + '<span class="rm" title="치우기">×</span><span class="rs" title="크기 조절"></span>';
 
       el.querySelector(".rm").addEventListener("click", function (e) {
         e.stopPropagation();
@@ -243,8 +258,10 @@
         syncBoardEmpty();
       });
 
+      // 본체 드래그 = 이동 (탭하면 선택되어 핸들이 보임)
       el.addEventListener("pointerdown", function (e) {
-        if (e.target.classList.contains("rm")) return;
+        if (e.target.classList.contains("rm") || e.target.classList.contains("rs")) return;
+        selectPlaced(el);
         el.setPointerCapture(e.pointerId);
         el.classList.add("grab");
         var b = board.getBoundingClientRect();
@@ -265,6 +282,31 @@
         el.addEventListener("pointerup", up);
       });
 
+      // 모서리 핸들 드래그 = 크기 조절 (중심~포인터 거리로 폭 역산)
+      var rs = el.querySelector(".rs");
+      rs.addEventListener("pointerdown", function (e) {
+        e.stopPropagation();
+        selectPlaced(el);
+        rs.setPointerCapture(e.pointerId);
+        el.classList.add("grab");
+        var b = board.getBoundingClientRect();
+        var cx = item.x * b.width, cy = item.y * b.height;
+        var baseW = BOARD_BASE * wareScale(item.ware);
+        function move(ev) {
+          var dx = (ev.clientX - b.left) - cx, dy = (ev.clientY - b.top) - cy;
+          var d = Math.sqrt(dx * dx + dy * dy);
+          item.s = clamp((d * Math.SQRT2) / baseW, 0.4, 3);
+          el.style.width = (baseW * item.s) + "px";
+        }
+        function up() {
+          el.classList.remove("grab");
+          rs.removeEventListener("pointermove", move);
+          rs.removeEventListener("pointerup", up);
+        }
+        rs.addEventListener("pointermove", move);
+        rs.addEventListener("pointerup", up);
+      });
+
       return el;
     }
 
@@ -273,7 +315,8 @@
       var item = {
         ware: key,
         x: clamp(0.5 + ((n % 3) - 1) * 0.14, 0.08, 0.92),
-        y: clamp(0.4 + Math.floor(n / 3) * 0.16, 0.1, 0.9)
+        y: clamp(0.4 + Math.floor(n / 3) * 0.16, 0.1, 0.9),
+        s: 1
       };
       placed.push(item);
       board.appendChild(makePlaced(item));
@@ -314,7 +357,7 @@
       if (Array.isArray(teaware) && teaware.length && typeof teaware[0] === "object") {
         var inner = teaware.map(function (it) {
           if (!WARE[it.ware]) return "";
-          var w = MINI_BASE * wareScale(it.ware);
+          var w = MINI_BASE * wareScale(it.ware) * (it.s || 1);
           var z = it.ware === "teaboard" ? ";z-index:0" : "";
           return '<div class="placed" style="left:' + (it.x * 100) + "%;top:" + (it.y * 100) + "%;width:" + w + "px" + z + '">' + svgWrap(it.ware) + "</div>";
         }).join("");
@@ -364,7 +407,7 @@
       var now = new Date().toISOString();
       var card = {
         id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()),
-        teaware: placed.map(function (p) { return { ware: p.ware, x: p.x, y: p.y }; }),
+        teaware: placed.map(function (p) { return { ware: p.ware, x: p.x, y: p.y, s: p.s }; }),
         color: get("color"),
         taste: get("taste"),
         mood: get("mood"),
@@ -382,6 +425,7 @@
       window.scrollTo({ top: document.querySelector(".timeline").offsetTop - 12, behavior: "smooth" });
     }
 
+    board.addEventListener("pointerdown", function (e) { if (e.target === board) selectPlaced(null); });
     renderPalette();
     syncBoardEmpty();
     renderList();
