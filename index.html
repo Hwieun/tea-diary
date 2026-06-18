@@ -80,6 +80,12 @@
     }
     .placed .rs::before { content: "⤡"; display: block; font-size: 11px; color: #b6ad9b; line-height: 16px; text-align: center; }
     .placed.sel { z-index: 6; }
+    @keyframes warePop {
+      0% { transform: translate(-50%, -50%) scale(.4); opacity: 0; }
+      60% { transform: translate(-50%, -50%) scale(1.12); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(1); }
+    }
+    .placed.pop { animation: warePop .28s ease-out; }
     .placed:hover .rm, .placed.grab .rm, .placed.sel .rm,
     .placed:hover .rs, .placed.grab .rs, .placed.sel .rs { opacity: 1; }
 
@@ -320,12 +326,16 @@
       var n = placed.length;
       var item = {
         ware: key,
-        x: clamp(0.5 + ((n % 3) - 1) * 0.14, 0.08, 0.92),
-        y: clamp(0.4 + Math.floor(n / 3) * 0.16, 0.1, 0.9),
+        x: clamp(0.5 + ((n % 3) - 1) * 0.2, 0.1, 0.9),
+        y: clamp(0.38 + Math.floor(n / 3) * 0.2, 0.12, 0.88),
         s: 1
       };
       placed.push(item);
-      board.appendChild(makePlaced(item));
+      var el = makePlaced(item);
+      board.appendChild(el);
+      selectPlaced(el); // 방금 올린 다구를 맨 앞으로 띄워 가려지지 않게
+      el.classList.add("pop");
+      el.addEventListener("animationend", function () { el.classList.remove("pop"); }, { once: true });
       syncBoardEmpty();
     }
 
