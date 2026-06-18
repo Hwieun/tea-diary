@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#6b8f71" />
+  <title>차 그림일기</title>
+  <style>
+    :root {
+      --bg: #f5f1e8;
+      --card: #fffdf8;
+      --ink: #3a3a32;
+      --muted: #9a9384;
+      --accent: #6b8f71;
+      --line: #e7e1d3;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    }
+    header {
+      text-align: center;
+      padding: 22px 16px 6px;
+    }
+    header h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: .02em; }
+    header p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+    main { max-width: 560px; margin: 0 auto; padding: 12px 16px 96px; }
+
+    .compose {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 1px 2px rgba(0,0,0,.03);
+    }
+    .label { font-size: 12px; color: var(--muted); margin: 14px 2px 6px; }
+    .label:first-child { margin-top: 0; }
+
+    .teaware {
+      display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .teaware button {
+      font-size: 26px; line-height: 1;
+      width: 46px; height: 46px;
+      border: 1px solid var(--line); background: #fff;
+      border-radius: 12px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform .08s ease, border-color .12s ease, background .12s ease;
+    }
+    .teaware button[aria-pressed="true"] {
+      border-color: var(--accent); background: #eef3ec; transform: translateY(-1px);
+    }
+
+    input[type="text"] {
+      width: 100%; font-size: 16px; color: var(--ink);
+      padding: 11px 12px; border: 1px solid var(--line);
+      border-radius: 10px; background: #fff;
+    }
+    input::placeholder { color: #c4bdac; }
+
+    .save {
+      width: 100%; margin-top: 18px;
+      font-size: 16px; font-weight: 600; color: #fff;
+      background: var(--accent); border: none;
+      padding: 13px; border-radius: 12px; cursor: pointer;
+    }
+    .save:active { opacity: .9; }
+
+    .timeline { margin-top: 26px; }
+    .timeline h2 { font-size: 13px; color: var(--muted); font-weight: 600; margin: 0 2px 10px; }
+    .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 30px 0; }
+
+    .entry {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 16px; padding: 14px 16px; margin-bottom: 12px;
+      display: flex; gap: 14px;
+    }
+    .entry .ware { font-size: 30px; line-height: 1.1; flex-shrink: 0; }
+    .entry .body { flex: 1; min-width: 0; }
+    .entry .date { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+    .entry .fields { font-size: 14px; line-height: 1.55; }
+    .entry .fields .k { color: var(--muted); margin-right: 4px; }
+    .entry .del {
+      background: none; border: none; color: #cfc7b6; font-size: 18px;
+      cursor: pointer; padding: 0 2px; align-self: flex-start;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>차 그림일기</h1>
+    <p>오늘 마신 차 한 잔을 간직하세요</p>
+  </header>
+
+  <main>
+    <section class="compose">
+      <div class="label">다구</div>
+      <div class="teaware" id="teaware"></div>
+
+      <div class="label">색</div>
+      <input type="text" id="color" placeholder="맑은 호박빛…" />
+      <div class="label">맛</div>
+      <input type="text" id="taste" placeholder="고소하고 끝이 달았다…" />
+      <div class="label">기분</div>
+      <input type="text" id="mood" placeholder="차분해졌다…" />
+      <div class="label">함께한 사람</div>
+      <input type="text" id="withWhom" placeholder="혼자 / 누구와…" />
+
+      <button class="save" id="save">간직하기</button>
+    </section>
+
+    <section class="timeline">
+      <h2>지난 기록</h2>
+      <div id="list"></div>
+    </section>
+  </main>
+
+  <script>
+    "use strict";
+    var STORE_KEY = "tea-cards";
+    var WARE = ["🍵", "🫖", "🍶", "☕", "🏺", "🥃", "🫗", "🍃"];
+
+    var selectedWare = [];
+
+    function load() {
+      try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; }
+      catch (e) { return []; }
+    }
+    function save(cards) {
+      localStorage.setItem(STORE_KEY, JSON.stringify(cards));
+    }
+
+    function fmtDate(iso) {
+      var d = new Date(iso);
+      var days = ["일", "월", "화", "수", "목", "금", "토"];
+      return d.getFullYear() + ". " + (d.getMonth() + 1) + ". " + d.getDate() +
+             " (" + days[d.getDay()] + ") " +
+             String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+    }
+
+    function renderTeaware() {
+      var box = document.getElementById("teaware");
+      box.innerHTML = "";
+      WARE.forEach(function (emoji) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.textContent = emoji;
+        b.setAttribute("aria-pressed", selectedWare.indexOf(emoji) > -1 ? "true" : "false");
+        b.addEventListener("click", function () {
+          var i = selectedWare.indexOf(emoji);
+          if (i > -1) selectedWare.splice(i, 1); else selectedWare.push(emoji);
+          b.setAttribute("aria-pressed", i > -1 ? "false" : "true");
+        });
+        box.appendChild(b);
+      });
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    }
+
+    function fieldLine(key, val) {
+      if (!val) return "";
+      return '<div><span class="k">' + key + '</span>' + escapeHtml(val) + "</div>";
+    }
+
+    function renderList() {
+      var list = document.getElementById("list");
+      var cards = load();
+      if (!cards.length) {
+        list.innerHTML = '<div class="empty">아직 기록이 없어요.<br>첫 잔을 간직해보세요 🍵</div>';
+        return;
+      }
+      list.innerHTML = "";
+      cards.slice().reverse().forEach(function (card) {
+        var el = document.createElement("div");
+        el.className = "entry";
+        var ware = card.teaware && card.teaware.length ? card.teaware.join(" ") : "🍵";
+        el.innerHTML =
+          '<div class="ware">' + ware + "</div>" +
+          '<div class="body">' +
+            '<div class="date">' + fmtDate(card.createdAt) + "</div>" +
+            '<div class="fields">' +
+              fieldLine("색", card.color) +
+              fieldLine("맛", card.taste) +
+              fieldLine("기분", card.mood) +
+              fieldLine("함께", card.withWhom) +
+            "</div>" +
+          "</div>" +
+          '<button class="del" title="삭제" data-id="' + card.id + '">×</button>';
+        list.appendChild(el);
+      });
+      list.querySelectorAll(".del").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          if (!confirm("이 기록을 지울까요?")) return;
+          var id = btn.getAttribute("data-id");
+          save(load().filter(function (c) { return c.id !== id; }));
+          renderList();
+        });
+      });
+    }
+
+    function handleSave() {
+      var get = function (id) { return document.getElementById(id).value.trim(); };
+      var now = new Date().toISOString();
+      var card = {
+        id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()),
+        teaware: selectedWare.slice(),
+        color: get("color"),
+        taste: get("taste"),
+        mood: get("mood"),
+        withWhom: get("withWhom"),
+        createdAt: now,
+        updatedAt: now
+      };
+      var cards = load();
+      cards.push(card);
+      save(cards);
+
+      selectedWare = [];
+      ["color", "taste", "mood", "withWhom"].forEach(function (id) { document.getElementById(id).value = ""; });
+      renderTeaware();
+      renderList();
+      window.scrollTo({ top: document.querySelector(".timeline").offsetTop - 12, behavior: "smooth" });
+    }
+
+    renderTeaware();
+    renderList();
+    document.getElementById("save").addEventListener("click", handleSave);
+  </script>
+</body>
+</html>
