@@ -2,7 +2,7 @@
 
 차를 마신 뒤 다구를 고르고 색·맛·기분·함께한 사람을 적어 그림일기 카드로 간직하는 폰 전용 앱.
 
-**데모:** https://hwieun.github.io/tea-diary/ (배포 후)
+**데모:** https://hwieun.github.io/tea-diary/
 
 ## 목적
 
