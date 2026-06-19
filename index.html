@@ -102,6 +102,31 @@
       outline: 1px dashed #c2bbab; outline-offset: 3px;
     }
 
+    /* 색칠 붓질 레이어 */
+    .paint, .mini-paint {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      pointer-events: none;
+    }
+    .paint path, .mini-paint path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .board.draw { cursor: crosshair; }
+    .board.draw .placed { pointer-events: none; }
+
+    .paintbar { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .draw-toggle, .undo-stroke {
+      font-size: 13px; padding: 7px 12px; border: 1px solid var(--line);
+      background: #fff; border-radius: 10px; cursor: pointer; color: var(--muted);
+    }
+    .draw-toggle.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .undo-stroke { display: none; }
+    .paintbar.on .undo-stroke { display: inline-block; }
+    .swatches { display: none; gap: 6px; }
+    .paintbar.on .swatches { display: flex; }
+    .swatch {
+      width: 24px; height: 24px; border-radius: 50%;
+      border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); cursor: pointer;
+    }
+    .swatch.sel { box-shadow: 0 0 0 2px var(--accent); transform: scale(1.12); }
+
     .defs { position: absolute; }
     .ware-svg { width: 100%; height: auto; display: block; pointer-events: none; overflow: visible; }
     .ware-svg * {
@@ -227,7 +252,15 @@
   <main>
     <section class="compose">
       <div class="label">차림 <span class="hint">— 빈 곳 탭은 손글씨, 다구 탭은 차림</span></div>
-      <div class="board empty" id="board"></div>
+      <div class="board empty" id="board">
+        <svg class="paint" id="paint" viewBox="0 0 400 300" preserveAspectRatio="none"></svg>
+      </div>
+
+      <div class="paintbar" id="paintbar">
+        <button type="button" id="drawToggle" class="draw-toggle">✏️ 색칠</button>
+        <span class="swatches" id="swatches"></span>
+        <button type="button" id="undoStroke" class="undo-stroke" title="한 획 지우기">↶</button>
+      </div>
 
       <div class="palette" id="palette"></div>
 
@@ -293,6 +326,24 @@
       else el.style.width = (BOARD_BASE * wareScale(item.ware) * item.s) + "px";
     }
 
+    var PAINT_COLORS = ["#d99a3a", "#9cbf6b", "#b6452f", "#3a3a32", "#7fa8c9", "#c98ab0"];
+    var PAINT_W = 7;
+    var strokes = [];               // [{c, w, p:[[rx,ry],...]}] — 점은 그림판 대비 비율
+    var drawMode = false, drawColor = PAINT_COLORS[0];
+
+    function strokeD(p) {
+      if (!p.length) return "";
+      var d = "M" + (p[0][0] * 400).toFixed(1) + " " + (p[0][1] * 300).toFixed(1);
+      for (var i = 1; i < p.length; i++) d += "L" + (p[i][0] * 400).toFixed(1) + " " + (p[i][1] * 300).toFixed(1);
+      return d;
+    }
+    function strokesPathsHtml(paint) {
+      if (!Array.isArray(paint) || !paint.length) return "";
+      return paint.map(function (s) {
+        return '<path d="' + strokeD(s.p) + '" stroke="' + s.c + '" stroke-width="' + (s.w || PAINT_W) + '" fill="none"/>';
+      }).join("");
+    }
+
     function load() {
       try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; }
       catch (e) { return []; }
@@ -314,9 +365,61 @@
 
     // ---- 작성 그림판 ----
     var board = document.getElementById("board");
+    var paintSvg = document.getElementById("paint");
 
     function syncBoardEmpty() {
-      board.classList.toggle("empty", placed.length === 0);
+      board.classList.toggle("empty", placed.length === 0 && strokes.length === 0);
+    }
+
+    function renderStrokes() { paintSvg.innerHTML = strokesPathsHtml(strokes); }
+
+    // 색칠: board 위에서 손가락이 지나간 자취를 한 획으로 쌓음
+    function startStroke(e) {
+      var b = board.getBoundingClientRect();
+      var s = { c: drawColor, w: PAINT_W, p: [[(e.clientX - b.left) / b.width, (e.clientY - b.top) / b.height]] };
+      strokes.push(s);
+      var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("stroke", s.c);
+      path.setAttribute("stroke-width", s.w);
+      path.setAttribute("fill", "none");
+      path.setAttribute("d", strokeD(s.p));
+      paintSvg.appendChild(path);
+      board.setPointerCapture(e.pointerId);
+      function move(ev) {
+        s.p.push([clamp((ev.clientX - b.left) / b.width, 0, 1), clamp((ev.clientY - b.top) / b.height, 0, 1)]);
+        path.setAttribute("d", strokeD(s.p));
+      }
+      function up() {
+        board.removeEventListener("pointermove", move);
+        board.removeEventListener("pointerup", up);
+        syncBoardEmpty();
+      }
+      board.addEventListener("pointermove", move);
+      board.addEventListener("pointerup", up);
+    }
+
+    function setDrawMode(on) {
+      drawMode = on;
+      board.classList.toggle("draw", on);
+      document.getElementById("paintbar").classList.toggle("on", on);
+      document.getElementById("drawToggle").classList.toggle("on", on);
+      if (on) selectPlaced(null);
+    }
+
+    function renderSwatches() {
+      var wrap = document.getElementById("swatches");
+      wrap.innerHTML = "";
+      PAINT_COLORS.forEach(function (c) {
+        var s = document.createElement("span");
+        s.className = "swatch" + (c === drawColor ? " sel" : "");
+        s.style.background = c;
+        s.addEventListener("click", function () {
+          drawColor = c;
+          wrap.querySelectorAll(".swatch").forEach(function (n) { n.classList.remove("sel"); });
+          s.classList.add("sel");
+        });
+        wrap.appendChild(s);
+      });
     }
 
     function selectPlaced(el) {
@@ -429,7 +532,9 @@
 
     function clearBoard() {
       placed = [];
+      strokes = [];
       board.querySelectorAll(".placed").forEach(function (n) { n.remove(); });
+      renderStrokes();
       syncBoardEmpty();
     }
 
@@ -488,8 +593,10 @@
       return '<div><span class="k">' + key + '</span>' + escapeHtml(val) + "</div>";
     }
 
-    function renderMini(teaware) {
+    function renderMini(teaware, paint) {
       // 신형: [{ware,x,y}] → 미니 그림판. 구형: ["🍵",...] → 이모지 줄.
+      var paintHtml = strokesPathsHtml(paint);
+      if (paintHtml) paintHtml = '<svg class="mini-paint" viewBox="0 0 400 300" preserveAspectRatio="none">' + paintHtml + "</svg>";
       if (Array.isArray(teaware) && teaware.length && typeof teaware[0] === "object") {
         var inner = teaware.map(function (it) {
           if (it.type === "text") {
@@ -501,10 +608,12 @@
           var z = it.ware === "teaboard" ? ";z-index:-1" : "";
           return '<div class="placed" style="left:' + (it.x * 100) + "%;top:" + (it.y * 100) + "%;width:" + w + "px" + z + '">' + svgWrap(it.ware) + "</div>";
         }).join("");
-        return '<div class="mini">' + inner + "</div>";
+        return '<div class="mini">' + paintHtml + inner + "</div>";
       }
-      var emojis = (Array.isArray(teaware) && teaware.length) ? teaware.join(" ") : "🍵";
-      return '<div class="mini"><div class="legacy-ware" style="position:absolute;left:8px;top:8px">' + escapeHtml(emojis) + "</div></div>";
+      var hasLegacy = Array.isArray(teaware) && teaware.length;
+      var emojis = hasLegacy ? teaware.join(" ") : (paintHtml ? "" : "🍵");
+      var legacy = emojis ? '<div class="legacy-ware" style="position:absolute;left:8px;top:8px">' + escapeHtml(emojis) + "</div>" : "";
+      return '<div class="mini">' + paintHtml + legacy + "</div>";
     }
 
     function renderList(newId) {
@@ -525,7 +634,7 @@
           fieldLine("함께", card.withWhom);
         if (!fields) fields = '<div class="none">차림만 간직한 날</div>';
         el.innerHTML =
-          renderMini(card.teaware) +
+          renderMini(card.teaware, card.paint) +
           '<div class="body">' +
             '<div class="date">' + fmtDate(card.createdAt) + "</div>" +
             '<div class="fields">' + fields + "</div>" +
@@ -579,6 +688,7 @@
             ? { type: "text", text: p.text, x: p.x, y: p.y, s: p.s }
             : { ware: p.ware, x: p.x, y: p.y, s: p.s };
         }),
+        paint: strokes.map(function (s) { return { c: s.c, w: s.w, p: s.p }; }),
         color: get("color"),
         taste: get("taste"),
         mood: get("mood"),
@@ -599,10 +709,11 @@
     var boardTap = null;
     board.addEventListener("pointerdown", function (e) {
       if (e.target !== board) return;
+      if (drawMode) { startStroke(e); return; }
       boardTap = { x: e.clientX, y: e.clientY, hadSel: !!board.querySelector(".placed.sel") };
     });
     board.addEventListener("pointerup", function (e) {
-      if (e.target !== board || !boardTap) return;
+      if (drawMode || e.target !== board || !boardTap) return;
       var moved = Math.abs(e.clientX - boardTap.x) + Math.abs(e.clientY - boardTap.y) > 8;
       var hadSel = boardTap.hadSel;
       boardTap = null;
@@ -620,7 +731,15 @@
       if (e.key === "Enter") { e.preventDefault(); commitText(); }
     });
 
+    document.getElementById("drawToggle").addEventListener("click", function () { setDrawMode(!drawMode); });
+    document.getElementById("undoStroke").addEventListener("click", function () {
+      strokes.pop();
+      renderStrokes();
+      syncBoardEmpty();
+    });
+
     renderPalette();
+    renderSwatches();
     syncBoardEmpty();
     renderList();
     document.getElementById("save").addEventListener("click", handleSave);
