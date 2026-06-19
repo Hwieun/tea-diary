@@ -331,7 +331,7 @@
       el.style.left = (item.x * 100) + "%";
       el.style.top = (item.y * 100) + "%";
       applySize(el, item);
-      if (item.ware === "teaboard") el.style.zIndex = "0"; // 바탕은 뒤에 깔림
+      if (item.ware === "teaboard") el.style.zIndex = "-1"; // 받침은 늘 뒤에 깔려 순서와 무관하게 다구가 위에 올라감
       var content = isText(item) ? '<span class="txt"></span>' : svgWrap(item.ware);
       el.innerHTML = content + '<span class="rm" title="치우기">×</span><span class="rs" title="크기 조절"></span>';
       if (isText(item)) el.querySelector(".txt").textContent = item.text;
@@ -498,7 +498,7 @@
           }
           if (!WARE[it.ware]) return "";
           var w = MINI_BASE * wareScale(it.ware) * (it.s || 1);
-          var z = it.ware === "teaboard" ? ";z-index:0" : "";
+          var z = it.ware === "teaboard" ? ";z-index:-1" : "";
           return '<div class="placed" style="left:' + (it.x * 100) + "%;top:" + (it.y * 100) + "%;width:" + w + "px" + z + '">' + svgWrap(it.ware) + "</div>";
         }).join("");
         return '<div class="mini">' + inner + "</div>";
